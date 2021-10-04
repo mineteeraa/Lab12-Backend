@@ -12,10 +12,17 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import se331.lab.rest.entity.Organizer;
+import se331.lab.rest.repository.OrganizerRepository;
 import se331.lab.rest.security.JwtTokenUtil;
+import se331.lab.rest.security.entity.Authority;
+import se331.lab.rest.security.entity.AuthorityName;
 import se331.lab.rest.security.entity.JwtUser;
 import se331.lab.rest.security.entity.User;
+import se331.lab.rest.security.repository.AuthorityRepository;
 import se331.lab.rest.security.repository.UserRepository;
 import se331.lab.rest.util.LabMapper;
 
@@ -42,6 +49,12 @@ public class AuthenticationRestController {
     @Autowired
     UserRepository userRepository;
 
+    @Autowired
+    OrganizerRepository organizerRepository;
+
+    @Autowired
+    AuthorityRepository authorityRepository;
+
     @PostMapping("${jwt.route.authentication.path}")
     public ResponseEntity<?> createAuthenticationToken(@RequestBody JwtAuthenticationRequest authenticationRequest, Device device) throws AuthenticationException {
 
@@ -66,7 +79,6 @@ public class AuthenticationRestController {
         return ResponseEntity.ok(result);
     }
 
-
     @GetMapping(value = "${jwt.route.authentication.refresh}")
     public ResponseEntity<?> refreshAndGetAuthenticationToken(HttpServletRequest request) {
         String token = request.getHeader(tokenHeader);
@@ -81,5 +93,21 @@ public class AuthenticationRestController {
         }
     }
 
-
+    //Register
+    @PostMapping("${jwt.route.authentication.path}/register")
+    public ResponseEntity<?> registerUser(@RequestBody User user) throws AuthenticationException {
+        PasswordEncoder encoder = new BCryptPasswordEncoder();
+        Authority authUser = Authority.builder().name(AuthorityName.ROLE_USER).build();
+        authorityRepository.save(authUser);
+        organizerRepository.getById(2L).setUser(user);
+        user.setEnabled(true);
+        user.setPassword(encoder.encode(user.getPassword()));
+        user.setOrganizer(organizerRepository.getById(2L));
+        Map result = new HashMap();
+        User output = userRepository.save(user);
+        result.put("user", LabMapper.INSTANCE.getRegisterDto(output));
+        result.put("organizer", LabMapper.INSTANCE.getOrganizerAuthDTO(user.getOrganizer()));
+        user.getAuthorities().add(authUser);
+        return ResponseEntity.ok(result);
+    }
 }
